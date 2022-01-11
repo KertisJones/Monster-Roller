@@ -16,6 +16,19 @@ public class Roller : MonoBehaviour
     public bool allowGlancingBlowHouseRule = true;
     public bool allowCrits = true; // toggle to ignore crits with Adamantine armor
 
+    public struct DieResults
+    {
+        public int Damage;
+        public int BaseRoll;
+        //public int modifiedRoll;
+
+        public DieResults(int damage, int baseRoll)
+        {
+            this.Damage = damage;
+            this.BaseRoll = baseRoll;
+        }
+    }
+
 
     // Start is called before the first frame update
     void Start()
@@ -33,8 +46,8 @@ public class Roller : MonoBehaviour
     {
         if (GUI.Button(new Rect(10, 70, 100, 30), "Roll Attack!"))
         {
-            int damage = Attack(testTargetAC, testAttackModifier, testRollType, testDamageExpression);
-            Debug.Log(damage + " damage!");
+            DieResults attack = Attack(testTargetAC, testAttackModifier, testRollType, testDamageExpression);
+            Debug.Log(attack.BaseRoll + " to hit, " + attack.Damage + " damage!");
         }
 
         if (GUI.Button(new Rect(150, 70, 150, 30), "Roll Multi-Attack!"))
@@ -50,7 +63,7 @@ public class Roller : MonoBehaviour
         int totalDamage = 0;
         for (int i = 0; i < numberOfAttacks; i++)
         {
-            int attackDamage = Attack(targetAC, attackModifier, rollType, damageStr);
+            int attackDamage = Attack(targetAC, attackModifier, rollType, damageStr).Damage; //todo
             totalDamage += attackDamage;
             if (attackDamage > 0)
                 hits += 1;
@@ -59,7 +72,7 @@ public class Roller : MonoBehaviour
         return totalDamage;
     }
 
-    int Attack(int targetAC, int attackModifier, RollType rollType, string damageStr)
+    DieResults Attack(int targetAC, int attackModifier, RollType rollType, string damageStr)
     {
         int roll = Random.Range(1, 21);
         bool hit = false;        
@@ -110,7 +123,7 @@ public class Roller : MonoBehaviour
         {
             damage = Damage(damageStr, crit, glancingBlow);
         }
-        return damage;
+        return new DieResults(damage, roll);
     }
 
     int Damage(string damageStr, bool crit, bool glancingBlow)
