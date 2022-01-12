@@ -1,16 +1,23 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
 
 public class Roller : MonoBehaviour
 {
     public enum RollType { Normal, Advantage, Disadvantage };
 
-    public int testNumberOfAttacks = 1;
-    public int testTargetAC = 10;
-    public int testAttackModifier = 4;
-    public RollType testRollType = RollType.Normal;
-    public string testDamageExpression = "1d6+2";
+    public GameObject inputNumberOfAttacks;
+    public GameObject inputTargetAC;
+    public GameObject inputAttackModifier;
+    public GameObject inputRollType;
+    public GameObject inputDamageExpression;
+
+    public int defaultNumberOfAttacks = 1;
+    public int defaultTargetAC = 10;
+    public int defaultAttackModifier = 4;
+    public RollType defaultRollType = RollType.Normal;
+    public string defaultDamageExpression = "1d6+2";
 
 
     public bool allowGlancingBlowHouseRule = true;
@@ -46,13 +53,13 @@ public class Roller : MonoBehaviour
     {
         if (GUI.Button(new Rect(10, 70, 100, 30), "Roll Attack!"))
         {
-            DieResults attack = Attack(testTargetAC, testAttackModifier, testRollType, testDamageExpression);
-            Debug.Log(attack.BaseRoll + " to hit, " + attack.Damage + " damage!");
+            DieResults attack = Attack(GetTargetAC(), GetAttackModifier(), GetRollType(), GetDamageExpression());
+            Debug.Log(attack.BaseRoll + " to hit, " + attack.Damage + " (" + GetDamageExpression() + ") damage!");
         }
 
         if (GUI.Button(new Rect(150, 70, 150, 30), "Roll Multi-Attack!"))
         {
-            int damage = MultiAttack(testNumberOfAttacks, testTargetAC, testAttackModifier, testRollType, testDamageExpression);
+            int damage = MultiAttack(GetNumberOfAttacks(), GetTargetAC(), GetAttackModifier(), GetRollType(), GetDamageExpression());
             //Debug.Log(damage + " damage!");
         }
     }
@@ -68,7 +75,7 @@ public class Roller : MonoBehaviour
             if (attackDamage > 0)
                 hits += 1;
         }
-        Debug.Log(hits + " Attacks hit, dealing " + totalDamage + " damage!");
+        Debug.Log(hits + " Attacks out of " + numberOfAttacks + " hit, dealing " + totalDamage + " damage!");
         return totalDamage;
     }
 
@@ -90,7 +97,7 @@ public class Roller : MonoBehaviour
             roll = Mathf.Min(roll, roll2);
         }
         // Normal Hit
-        if (roll + attackModifier >= targetAC)
+        if (roll + attackModifier >= targetAC) //TODO add dice expression to attack mod for effects like bless
         {
             hit = true;
         }
@@ -157,9 +164,9 @@ public class Roller : MonoBehaviour
         // dieExpression contains a subtraction, use recursion to subtract each expression
         if (dieExpression.Contains("-"))
         {
-            string[] subtractExpressions = dieExpression.Split('-');
+            string[] subtractExpressions = dieExpression.Split('-'); //TODO subtraction doesn't work
             damage = DamageHelper(subtractExpressions[0], crit);
-            for (int i = 1; i == subtractExpressions.Length; i++)
+            for (int i = 1; i < subtractExpressions.Length; i++)
             {
                 damage -= DamageHelper(subtractExpressions[i], false);
             }
@@ -209,4 +216,60 @@ public class Roller : MonoBehaviour
         }
         return totalDamage;
     }
+    
+    #region GetVariables
+    int GetNumberOfAttacks()
+    {
+        if (inputNumberOfAttacks != null)
+        {
+            int numberOfAttacks = 0;
+            if (int.TryParse(inputNumberOfAttacks.GetComponent<TMP_InputField>().text, out numberOfAttacks))
+                return numberOfAttacks;
+        }
+        return defaultNumberOfAttacks;
+    }
+
+    int GetTargetAC()
+    {
+        if (inputTargetAC != null)
+        {
+            int targetAC = 0;
+            if (int.TryParse(inputTargetAC.GetComponent<TMP_InputField>().text, out targetAC))
+                return targetAC;
+        }
+        return defaultTargetAC;
+    }
+
+    int GetAttackModifier()
+    {
+        if (inputAttackModifier != null)
+        {
+            int attackModifier = 0;
+            if (int.TryParse(inputAttackModifier.GetComponent<TMP_InputField>().text, out attackModifier))
+                return attackModifier;
+        }
+        return defaultAttackModifier;
+    }
+
+    RollType GetRollType() //TODO
+    {
+        /*if (inputRollType != null)
+        {
+            int rollType = 0;
+            if (int.TryParse(inputRollType.GetComponent<TMP_InputField>().text, out rollType))
+                return rollType;
+        }*/
+        return defaultRollType;
+    }
+
+    string GetDamageExpression()
+    {
+        string damageExpression = defaultDamageExpression;
+        if (inputDamageExpression != null)
+            damageExpression = inputDamageExpression.GetComponent<TMP_InputField>().text;
+        if (damageExpression == "")
+            damageExpression = defaultDamageExpression;          
+        return damageExpression;
+    }
+    #endregion
 }
