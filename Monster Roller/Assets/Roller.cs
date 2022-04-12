@@ -23,19 +23,76 @@ public class Roller : MonoBehaviour
     public bool allowGlancingBlowHouseRule = true;
     public bool allowCrits = true; // toggle to ignore crits with Adamantine armor
 
-    public struct DieResults
+    public struct MultiAttackResultResult
+    {
+        public List<AttackResult> AttackResultResults;
+
+        public MultiAttackResultResult(List<AttackResult> AttackResultResults)
+        {
+            this.AttackResultResults = AttackResultResults;
+        }
+
+        public int GetTotalDamageDealt(int targetAC)
+        {
+            int damage = 0;
+            foreach (AttackResult AttackResult in this.AttackResultResults)
+            {
+                damage += AttackResult.Damage;
+            }
+            return damage;
+        }
+    }
+    
+    public struct AttackResult
     {
         public int Damage;
         public int BaseRoll;
+        public int AttackModifier;
         //public int modifiedRoll;
 
-        public DieResults(int damage, int baseRoll)
+        public AttackResult(int damage, int baseRoll, int AttackModifier)
         {
             this.Damage = damage;
             this.BaseRoll = baseRoll;
+            this.AttackModifier = AttackModifier;
+        }
+
+        public int GetDamageDealt(int targetAC, bool allowGlancingBlowHouseRule)
+        {
+            bool hit = false;
+            bool glancingBlow = false;
+            // Normal Hit
+            if (BaseRoll + AttackModifier >= targetAC) //TODO add dice expression to Attack mod for effects like bless
+            {
+                hit = true;
+            }
+            // Glancing Blow
+            if (BaseRoll + AttackModifier == targetAC)
+            {
+                hit = true;
+                if (allowGlancingBlowHouseRule)
+                    glancingBlow = true;
+            }
+            // Crit success/fail
+            if (BaseRoll == 1)
+            {
+                hit = false;
+                glancingBlow = false;
+            }
+            else if (BaseRoll == 20)
+            {
+                hit = true;
+                glancingBlow = false;
+            }
+
+            if (hit && glancingBlow)
+                return Mathf.FloorToInt(Damage / 2);
+            else if (hit)
+                return Damage;
+            else 
+                return 0;
         }
     }
-
 
     // Start is called before the first frame update
     void Start()
@@ -53,8 +110,8 @@ public class Roller : MonoBehaviour
     {
         if (GUI.Button(new Rect(10, 70, 100, 30), "Roll Attack!"))
         {
-            DieResults attack = Attack(GetTargetAC(), GetAttackModifier(), GetRollType(), GetDamageExpression());
-            Debug.Log(attack.BaseRoll + " to hit, " + attack.Damage + " (" + GetDamageExpression() + ") damage!");
+            AttackResult AttackResult = Attack(GetAttackModifier(), GetRollType(), GetDamageExpression());
+            Debug.Log(AttackResult.BaseRoll + " to hit, " + AttackResult.Damage + " (" + GetDamageExpression() + ") damage!");
         }
 
         if (GUI.Button(new Rect(150, 70, 150, 30), "Roll Multi-Attack!"))
@@ -64,28 +121,42 @@ public class Roller : MonoBehaviour
         }
     }
 
-    int MultiAttack(int numberOfAttacks, int targetAC, int attackModifier, RollType rollType, string damageStr)
+    int MultiAttack(int numberOfAttacks, int targetAC, int AttackModifier, RollType rollType, string damageStr)
     {
         int hits = 0;
         int totalDamage = 0;
+        string attackRollsString = "";
+        string damageRollsString = "";
         for (int i = 0; i < numberOfAttacks; i++)
         {
-            int attackDamage = Attack(targetAC, attackModifier, rollType, damageStr).Damage; //todo
-            totalDamage += attackDamage;
-            if (attackDamage > 0)
+            //int AttackDamage = Attack(AttackModifier, rollType, damageStr).GetDamageDealt(targetAC, allowGlancingBlowHouseRule); //todo
+            AttackResult attack = Attack(AttackModifier, rollType, damageStr);
+            int damage = attack.GetDamageDealt(targetAC, allowGlancingBlowHouseRule);
+            int attackRoll = attack.BaseRoll + attack.AttackModifier;
+
+            attackRollsString += ", " + attackRoll;
+            
+
+            totalDamage += damage;
+            if (attackRoll >= targetAC)
+            {
                 hits += 1;
+                damageRollsString += ", " + damage;
+            }
         }
-        Debug.Log(hits + " Attacks out of " + numberOfAttacks + " hit, dealing " + totalDamage + " damage!");
+        Debug.Log(hits + " Attack out of " + numberOfAttacks + " hit" + attackRollsString + "; dealing " + totalDamage + " damage!" + damageRollsString);
         return totalDamage;
     }
 
-    DieResults Attack(int targetAC, int attackModifier, RollType rollType, string damageStr)
+    AttackResult Attack(int AttackModifier, RollType rollType, string damageStr)
     {
         int roll = Random.Range(1, 21);
-        bool hit = false;        
+        //bool hit = false;        
         bool crit = false;
-        bool glancingBlow = false;
+        bool critFail = false;
+        //bool glancingBlow = false;
 
+        // Advantage/Disadvantage
         if (rollType == RollType.Advantage)
         {
             int roll2 = Random.Range(1, 21);
@@ -96,44 +167,46 @@ public class Roller : MonoBehaviour
             int roll2 = Random.Range(1, 21);
             roll = Mathf.Min(roll, roll2);
         }
-        // Normal Hit
-        if (roll + attackModifier >= targetAC) //TODO add dice expression to attack mod for effects like bless
+
+        /*// Normal Hit
+        if (roll + AttackModifier >= targetAC) //TODO add dice expression to Attack mod for effects like bless
         {
             hit = true;
         }
         // Glancing Blow
-        if (roll + attackModifier == targetAC)
+        if (roll + AttackModifier == targetAC)
         {
             hit = true;
             if (allowGlancingBlowHouseRule)
                 glancingBlow = true;
-        }
+        }*/
         // Natural 20, Critical Hit
         if (roll == 20)
         {
-            hit = true;
-            glancingBlow = false;
+            //hit = true;
+            //glancingBlow = false;
             if (allowCrits)
                 crit = true;
         }
         // Natural 1, Critical Miss
         if (roll == 1)
         {
-            hit = false;
+            critFail = true;
+            //hit = false;
         }        
 
-        int toHit = roll + attackModifier;
+        int toHit = roll + AttackModifier;
         //Debug.Log(toHit + " to hit AC " + targetAC + ", Hit: " + hit + ", Crit: " + crit + ", Glancing: " + glancingBlow);
 
         int damage = 0;
-        if (hit)
+        if (!critFail)
         {
-            damage = Damage(damageStr, crit, glancingBlow);
+            damage = Damage(damageStr, crit);//, glancingBlow);
         }
-        return new DieResults(damage, roll);
+        return new AttackResult(damage, roll, AttackModifier);
     }
 
-    int Damage(string damageStr, bool crit, bool glancingBlow)
+    int Damage(string damageStr, bool crit)//, bool glancingBlow)
     {
         string[] diceExpressions = damageStr.Split('+');
 
@@ -144,8 +217,8 @@ public class Roller : MonoBehaviour
         }
         if (totalDamage < 0)
             totalDamage = 0;
-        if (glancingBlow)
-            totalDamage = Mathf.FloorToInt(totalDamage / 2);
+        /*if (glancingBlow)
+            totalDamage = Mathf.FloorToInt(totalDamage / 2);*/
 
         return totalDamage;
     }
@@ -244,9 +317,9 @@ public class Roller : MonoBehaviour
     {
         if (inputAttackModifier != null)
         {
-            int attackModifier = 0;
-            if (int.TryParse(inputAttackModifier.GetComponent<TMP_InputField>().text, out attackModifier))
-                return attackModifier;
+            int AttackModifier = 0;
+            if (int.TryParse(inputAttackModifier.GetComponent<TMP_InputField>().text, out AttackModifier))
+                return AttackModifier;
         }
         return defaultAttackModifier;
     }
