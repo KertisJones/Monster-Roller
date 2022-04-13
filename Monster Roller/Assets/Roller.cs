@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using UnityEngine.UI;
 
 public class Roller : MonoBehaviour
 {
@@ -12,6 +13,8 @@ public class Roller : MonoBehaviour
     public GameObject inputAttackModifier;
     public GameObject inputRollType;
     public GameObject inputDamageExpression;
+    public GameObject inputAllowCrits;
+    public GameObject inputGlancingBlow;
 
     public int defaultNumberOfAttacks = 1;
     public int defaultTargetAC = 10;
@@ -20,8 +23,8 @@ public class Roller : MonoBehaviour
     public string defaultDamageExpression = "1d6+2";
 
 
-    public bool allowGlancingBlowHouseRule = true;
-    public bool allowCrits = true; // toggle to ignore crits with Adamantine armor
+    public bool defaultGlancingBlow = true;
+    public bool defaultAllowCrits = true; // toggle to ignore crits with Adamantine armor
 
     public struct MultiAttackResultResult
     {
@@ -131,7 +134,7 @@ public class Roller : MonoBehaviour
         {
             //int AttackDamage = Attack(AttackModifier, rollType, damageStr).GetDamageDealt(targetAC, allowGlancingBlowHouseRule); //todo
             AttackResult attack = Attack(AttackModifier, rollType, damageStr);
-            int damage = attack.GetDamageDealt(targetAC, allowGlancingBlowHouseRule);
+            int damage = attack.GetDamageDealt(targetAC, GetAllowGlancingBlow());
             int attackRoll = attack.BaseRoll + attack.AttackModifier;
 
             attackRollsString += ", " + attackRoll;
@@ -185,7 +188,7 @@ public class Roller : MonoBehaviour
         {
             //hit = true;
             //glancingBlow = false;
-            if (allowCrits)
+            if (GetAllowCrits())
                 crit = true;
         }
         // Natural 1, Critical Miss
@@ -326,12 +329,21 @@ public class Roller : MonoBehaviour
 
     RollType GetRollType() //TODO
     {
-        /*if (inputRollType != null)
+        if (inputRollType != null)
         {
-            int rollType = 0;
-            if (int.TryParse(inputRollType.GetComponent<TMP_InputField>().text, out rollType))
-                return rollType;
-        }*/
+            int rollTypeValue = inputRollType.GetComponent<TMP_Dropdown>().value;
+            switch (rollTypeValue)
+            {
+                case 0:
+                    return RollType.Normal;
+                case 1:
+                    return RollType.Advantage;
+                case 2:
+                    return RollType.Disadvantage;
+                default:
+                    return defaultRollType;
+            }            
+        }
         return defaultRollType;
     }
 
@@ -343,6 +355,24 @@ public class Roller : MonoBehaviour
         if (damageExpression == "")
             damageExpression = defaultDamageExpression;          
         return damageExpression;
+    }
+
+    bool GetAllowCrits()
+    {
+        if (inputAllowCrits != null)
+        {
+            return inputAllowCrits.GetComponent<Toggle>().isOn;
+        }
+        return defaultAllowCrits;
+    }
+
+    bool GetAllowGlancingBlow()
+    {
+        if (inputGlancingBlow != null)
+        {
+            return inputGlancingBlow.GetComponent<Toggle>().isOn;
+        }
+        return defaultGlancingBlow;
     }
     #endregion
 }
