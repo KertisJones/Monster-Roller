@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System.Linq;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
@@ -15,6 +16,8 @@ public class Roller : MonoBehaviour
     public GameObject inputDamageExpression;
     public GameObject inputAllowCrits;
     public GameObject inputGlancingBlow;
+    public TMP_Text outputSimpleText;
+    public TMP_Text outputLogText;
 
     public int defaultNumberOfAttacks = 1;
     public int defaultTargetAC = 10;
@@ -51,70 +54,62 @@ public class Roller : MonoBehaviour
         public int Damage;
         public int BaseRoll;
         public int AttackModifier;
+        public bool isHit;
+        public bool isGlancingBlow;
         //public int modifiedRoll;
 
-        public AttackResult(int damage, int baseRoll, int AttackModifier)
+        public AttackResult(int damage, int baseRoll, int attackModifier)
         {
             this.Damage = damage;
             this.BaseRoll = baseRoll;
-            this.AttackModifier = AttackModifier;
+            this.AttackModifier = attackModifier;
+            this.isHit = false;
+            this.isGlancingBlow = false;
         }
 
         public int GetDamageDealt(int targetAC, bool allowGlancingBlowHouseRule)
         {
-            bool hit = false;
-            bool glancingBlow = false;
             // Normal Hit
             if (BaseRoll + AttackModifier >= targetAC) //TODO add dice expression to Attack mod for effects like bless
             {
-                hit = true;
+                isHit = true;
             }
             // Glancing Blow
             if (BaseRoll + AttackModifier == targetAC)
             {
-                hit = true;
+                isHit = true;
                 if (allowGlancingBlowHouseRule)
-                    glancingBlow = true;
+                    isGlancingBlow = true;
             }
             // Crit success/fail
             if (BaseRoll == 1)
             {
-                hit = false;
-                glancingBlow = false;
+                isHit = false;
+                isGlancingBlow = false;
             }
             else if (BaseRoll == 20)
             {
-                hit = true;
-                glancingBlow = false;
+                isHit = true;
+                isGlancingBlow = false;
             }
 
-            if (hit && glancingBlow)
+            if (isHit && isGlancingBlow)
                 return Mathf.FloorToInt(Damage / 2);
-            else if (hit)
+            else if (isHit)
                 return Damage;
             else 
                 return 0;
         }
     }
 
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
-
-    void OnGUI()
+    /*void OnGUI()
     {
         if (GUI.Button(new Rect(10, 70, 100, 30), "Roll Attack!"))
         {
             AttackResult AttackResult = Attack(GetAttackModifier(), GetRollType(), GetDamageExpression());
-            Debug.Log(AttackResult.BaseRoll + " to hit, " + AttackResult.Damage + " (" + GetDamageExpression() + ") damage!");
+            //Debug.Log(AttackResult.BaseRoll + " to hit, " + AttackResult.Damage + " (" + GetDamageExpression() + ") damage!");
+            WriteToOutputLog(AttackResult.BaseRoll + " to hit, " + AttackResult.Damage + " (" + GetDamageExpression() + ") damage!");
+            WriteToOutputSimple(AttackResult.isHit ? 1 : 0, AttackResult.Damage);
         }
 
         if (GUI.Button(new Rect(150, 70, 150, 30), "Roll Multi-Attack!"))
@@ -122,6 +117,11 @@ public class Roller : MonoBehaviour
             int damage = MultiAttack(GetNumberOfAttacks(), GetTargetAC(), GetAttackModifier(), GetRollType(), GetDamageExpression());
             //Debug.Log(damage + " damage!");
         }
+    }*/
+
+    public void TriggerAttack()
+    {
+        int damage = MultiAttack(GetNumberOfAttacks(), GetTargetAC(), GetAttackModifier(), GetRollType(), GetDamageExpression());
     }
 
     int MultiAttack(int numberOfAttacks, int targetAC, int AttackModifier, RollType rollType, string damageStr)
@@ -137,17 +137,32 @@ public class Roller : MonoBehaviour
             int damage = attack.GetDamageDealt(targetAC, GetAllowGlancingBlow());
             int attackRoll = attack.BaseRoll + attack.AttackModifier;
 
-            attackRollsString += ", " + attackRoll;
+            if (i > 0)
+                attackRollsString += ", ";
+
+            attackRollsString += attackRoll;
             
 
             totalDamage += damage;
             if (attackRoll >= targetAC)
             {
                 hits += 1;
-                damageRollsString += ", " + damage;
+                if (hits > 1)
+                    damageRollsString += " + ";
+                damageRollsString += damage;
             }
         }
-        Debug.Log(hits + " Attack out of " + numberOfAttacks + " hit" + attackRollsString + "; dealing " + totalDamage + " damage!" + damageRollsString);
+        //Debug.Log(hits + " Attack out of " + numberOfAttacks + " hit" + attackRollsString + "; dealing " + totalDamage + " damage!" + damageRollsString);
+        string attackText = " attacks";
+        string hitText = " hit";
+        if (hits == 1)
+        {
+            attackText = " attack";
+            hitText = " hits";
+        }
+            
+        WriteToOutputLog(hits + attackText + " out of " + numberOfAttacks + hitText + ", dealing " + totalDamage + " damage!\r\n("  + attackRollsString + "), (" + damageRollsString + ")");
+        WriteToOutputSimple(hits, totalDamage);
         return totalDamage;
     }
 
@@ -260,18 +275,24 @@ public class Roller : MonoBehaviour
             if (dieExpressionValues.Length < 2)
             {
                 Debug.LogWarning("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
+                WriteToOutputLog("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
                 return 0;
             }
             if (dieExpressionValues.Length > 2)
+            {
                 Debug.LogWarning("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
+                WriteToOutputLog("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
+            }
             if (!int.TryParse(dieExpressionValues[0], out numberOfDice))
             {
                 Debug.LogWarning("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
+                WriteToOutputLog("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
                 return 0;
             }
             if (!int.TryParse(dieExpressionValues[1], out dieSize))
             {
                 Debug.LogWarning("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
+                WriteToOutputLog("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
                 return 0;
             }
             if (crit)
@@ -280,6 +301,7 @@ public class Roller : MonoBehaviour
         }
 
         Debug.LogWarning("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
+        WriteToOutputLog("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
         return 0;
     }
 
@@ -373,6 +395,35 @@ public class Roller : MonoBehaviour
             return inputGlancingBlow.GetComponent<Toggle>().isOn;
         }
         return defaultGlancingBlow;
+    }
+    #endregion
+
+    #region Output
+    void WriteToOutputSimple(int hits, int damage)
+    {
+        string hitText = " Hits, ";
+        if (hits == 1)
+            hitText = " Hit, ";
+        outputSimpleText.text = hits + hitText + damage + " Damage";
+    }
+    void WriteToOutputLog(string outputTxt)
+    {
+        outputLogText.text = outputTxt + "\r\n" + outputLogText.text;
+        outputLogText.text.Last();
+
+        string[] lineArray = outputLogText.text.Split('\n');
+        if (lineArray.Length > 40)
+        {
+            string truncatedText = "";
+            for (int i = 0; i < 40; i++)
+            {
+                if (i > 0)
+                    truncatedText = truncatedText + "\r\n";
+                truncatedText = truncatedText + lineArray[i];
+            }
+            outputLogText.text = truncatedText;
+        }
+
     }
     #endregion
 }
