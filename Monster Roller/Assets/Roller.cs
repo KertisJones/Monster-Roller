@@ -21,9 +21,9 @@ public class Roller : MonoBehaviour
 
     public int defaultNumberOfAttacks = 1;
     public int defaultTargetAC = 10;
-    public int defaultAttackModifier = 4;
+    public string  defaultAttackModifier = "0";
     public RollType defaultRollType = RollType.Normal;
-    public string defaultDamageExpression = "1d6+2";
+    public string defaultDamageExpression = "0";
 
 
     public bool defaultGlancingBlow = true;
@@ -124,7 +124,7 @@ public class Roller : MonoBehaviour
         int damage = MultiAttack(GetNumberOfAttacks(), GetTargetAC(), GetAttackModifier(), GetRollType(), GetDamageExpression());
     }
 
-    int MultiAttack(int numberOfAttacks, int targetAC, int AttackModifier, RollType rollType, string damageStr)
+    int MultiAttack(int numberOfAttacks, int targetAC, string AttackModifier, RollType rollType, string damageStr)
     {
         int hits = 0;
         int totalDamage = 0;
@@ -133,7 +133,9 @@ public class Roller : MonoBehaviour
         for (int i = 0; i < numberOfAttacks; i++)
         {
             //int AttackDamage = Attack(AttackModifier, rollType, damageStr).GetDamageDealt(targetAC, allowGlancingBlowHouseRule); //todo
-            AttackResult attack = Attack(AttackModifier, rollType, damageStr);
+
+            // Parse the attack modifier before the attack
+            AttackResult attack = Attack(ParseDiceExpression(AttackModifier, false, false), rollType, damageStr);
             int damage = attack.GetDamageDealt(targetAC, GetAllowGlancingBlow());
             int attackRoll = attack.BaseRoll + attack.AttackModifier;
 
@@ -141,16 +143,19 @@ public class Roller : MonoBehaviour
                 attackRollsString += ", ";
 
             attackRollsString += attackRoll;
-            
+            if (attack.BaseRoll == 1)         
+                attackRollsString += "~";
+            else if (attack.BaseRoll == 20)         
+                attackRollsString += "*";
 
             totalDamage += damage;
-            if (attackRoll >= targetAC)
+            if ((attackRoll >= targetAC || attack.BaseRoll == 20) && attack.BaseRoll != 1)
             {
                 hits += 1;
                 if (hits > 1)
                     damageRollsString += " + ";
                 damageRollsString += damage;
-            }
+            }            
         }
         //Debug.Log(hits + " Attack out of " + numberOfAttacks + " hit" + attackRollsString + "; dealing " + totalDamage + " damage!" + damageRollsString);
         string attackText = " attacks";
@@ -168,6 +173,7 @@ public class Roller : MonoBehaviour
 
     AttackResult Attack(int AttackModifier, RollType rollType, string damageStr)
     {
+        Debug.Log("Attack Mod " + GetAttackModifier() + ": " + AttackModifier);
         int roll = Random.Range(1, 21);
         //bool hit = false;        
         bool crit = false;
@@ -219,21 +225,21 @@ public class Roller : MonoBehaviour
         int damage = 0;
         if (!critFail)
         {
-            damage = Damage(damageStr, crit);//, glancingBlow);
+            damage = ParseDiceExpression(damageStr, crit, true);//, glancingBlow);
         }
         return new AttackResult(damage, roll, AttackModifier);
     }
 
-    int Damage(string damageStr, bool crit)//, bool glancingBlow)
+    int ParseDiceExpression(string dieExpressionInput, bool crit, bool minOfZero)//, bool glancingBlow)
     {
-        string[] diceExpressions = damageStr.Split('+');
+        string[] diceExpressions = dieExpressionInput.Split('+');
 
         int totalDamage = 0;
         foreach (string dieExpression in diceExpressions)
         {
-            totalDamage += DamageHelper(dieExpression, crit);
+            totalDamage += ParseDiceExpressionHelper(dieExpression, crit);
         }
-        if (totalDamage < 0)
+        if (minOfZero && totalDamage < 0)
             totalDamage = 0;
         /*if (glancingBlow)
             totalDamage = Mathf.FloorToInt(totalDamage / 2);*/
@@ -241,7 +247,7 @@ public class Roller : MonoBehaviour
         return totalDamage;
     }
 
-    int DamageHelper(string dieExpression, bool crit)
+    int ParseDiceExpressionHelper(string dieExpression, bool crit)
     {
         // dieExpression is empty, return 0
         if (dieExpression == "")
@@ -256,10 +262,15 @@ public class Roller : MonoBehaviour
         if (dieExpression.Contains("-"))
         {
             string[] subtractExpressions = dieExpression.Split('-'); //TODO subtraction doesn't work
-            damage = DamageHelper(subtractExpressions[0], crit);
+            damage = ParseDiceExpressionHelper(subtractExpressions[0], crit);
+            /*if (dieExpression.First() == '-')
+            {
+                Debug.Log("SUBTRACTION: " + dieExpression);
+                damage *= -1;
+            }*/
             for (int i = 1; i < subtractExpressions.Length; i++)
             {
-                damage -= DamageHelper(subtractExpressions[i], false);
+                damage -= ParseDiceExpressionHelper(subtractExpressions[i], false);
             }
             return damage;
         }
@@ -272,16 +283,11 @@ public class Roller : MonoBehaviour
             int dieSize = 0;
 
             //Error Handling
-            if (dieExpressionValues.Length < 2)
+            if (dieExpressionValues.Length != 2)
             {
                 Debug.LogWarning("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
                 WriteToOutputLog("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
                 return 0;
-            }
-            if (dieExpressionValues.Length > 2)
-            {
-                Debug.LogWarning("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
-                WriteToOutputLog("Unsupported dice format detected, please use the format 'xdy+z'. Invalid expression: " + dieExpression);
             }
             if (!int.TryParse(dieExpressionValues[0], out numberOfDice))
             {
@@ -338,18 +344,17 @@ public class Roller : MonoBehaviour
         return defaultTargetAC;
     }
 
-    int GetAttackModifier()
+    string GetAttackModifier()
     {
+        string attackExpression = defaultAttackModifier;
         if (inputAttackModifier != null)
-        {
-            int AttackModifier = 0;
-            if (int.TryParse(inputAttackModifier.GetComponent<TMP_InputField>().text, out AttackModifier))
-                return AttackModifier;
-        }
-        return defaultAttackModifier;
+            attackExpression = inputAttackModifier.GetComponent<TMP_InputField>().text;
+        if (attackExpression == "")
+            attackExpression = defaultAttackModifier;
+        return attackExpression;
     }
 
-    RollType GetRollType() //TODO
+    RollType GetRollType()
     {
         if (inputRollType != null)
         {
